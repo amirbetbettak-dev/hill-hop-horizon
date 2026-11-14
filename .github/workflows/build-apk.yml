@@ -40,10 +40,11 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0
-          name: "Hill Hop Horizon APK v1.0 (بازی تپه‌نورد)"
+          tag_name: v1.1
+          name: "Hill Hop Horizon APK v1.1 (کاملاً آفلاین)"
           body: |
-            دانلود مستقیم فایل نصبی اندروید (APK) برای بازی تپه‌نورد.
+            نسخه کاملاً آفلاین بازی تپه‌نورد (بدون نیاز به اینترنت و وب).
+            تمامی فایل‌ها و صداها مستقیماً داخل بسته نصبی قرار دارند.
           files: app/build/outputs/apk/debug/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

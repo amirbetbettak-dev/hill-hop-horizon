@@ -7,9 +7,15 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
 
 public class MainActivity extends Activity {
     private WebView webView;
@@ -33,14 +39,47 @@ public class MainActivity extends Activity {
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
         settings.setAllowFileAccess(true);
+        settings.setAllowContentAccess(true);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
 
-        webView.setWebViewClient(new WebViewClient());
         webView.setWebChromeClient(new WebChromeClient());
-        webView.loadUrl("https://hill-hop-horizon.lovable.app");
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                String path = request.getUrl().getPath();
+                if (path == null || path.isEmpty() || path.equals("/")) {
+                    path = "/index.html";
+                }
+                String assetPath = "web" + path;
+                try {
+                    InputStream is = getAssets().open(assetPath);
+                    String mime = getMimeType(path);
+                    Map<String, String> headers = new HashMap<>();
+                    headers.put("Access-Control-Allow-Origin", "*");
+                    return new WebResourceResponse(mime, "UTF-8", 200, "OK", headers, is);
+                } catch (IOException e) {
+                    return super.shouldInterceptRequest(view, request);
+                }
+            }
+
+            private String getMimeType(String path) {
+                if (path.endsWith(".html")) return "text/html";
+                if (path.endsWith(".js") || path.endsWith(".mjs")) return "application/javascript";
+                if (path.endsWith(".css")) return "text/css";
+                if (path.endsWith(".json")) return "application/json";
+                if (path.endsWith(".png")) return "image/png";
+                if (path.endsWith(".svg")) return "image/svg+xml";
+                if (path.endsWith(".woff2")) return "font/woff2";
+                if (path.endsWith(".woff")) return "font/woff";
+                if (path.endsWith(".ttf")) return "font/ttf";
+                if (path.endsWith(".ico")) return "image/x-icon";
+                return "application/octet-stream";
+            }
+        });
+
+        webView.loadUrl("https://localhost/");
     }
 
     private void hideSystemUI() {
