@@ -1,57 +1,58 @@
 name: Build Android APK
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main ]
-  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
+    name: Build & Release APK
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v3
-      with:
-        gradle-version: '8.4'
+      - name: Set up Gradle 8.4
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4'
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
+      - name: Build Debug APK
+        run: gradle assembleDebug
 
-    - name: Build Debug APK
-      run: ./gradlew assembleDebug --stacktrace
+      - name: Upload APK to Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Hill-Hop-Horizon-APK
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 30
 
-    - name: Upload APK artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: app-debug
-        path: app/build/outputs/apk/debug/app-debug.apk
-
-    - name: Create GitHub Release v1.2
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: v1.2
-        name: "Hill Hop Horizon APK v1.2 (منوی جدید، ۱۰ ماشین جدید، فیزیک و موسیقی)"
-        body: |
-          نسخه v1.2 بازی تپه‌نورد (Hill Hop Horizon) - کاملاً آفلاین و بدون نیاز به اینترنت.
-          
-          ویژگی‌های جدید:
-          - اضافه شدن ۱۰ ماشین جدید از روی تصویر (ماسل‌کار، مانستر تراک، ماشین پلیس، آتش‌نشانی، فولکس ۵۳ و هایپرکارها) با مشخصات و ارتقای اختصاصی
-          - بازطراحی منو با تب‌های تفکیک‌شده (شروع، گاراژ، ارتقا، نقشه‌ها، تنظیمات)
-          - اصلاح فیزیک پرش‌ها و سنگین‌تر شدن فرودها + زوم‌اوت هوشمند دوربین در سرعت بالا
-          - سیستم موسیقی دوگانه (موزیک منو + موزیک داخل بازی) همراه با تنظیم بلندی صدا
-          - جاده‌های پویا و تصادفی در هر بار شروع
-          - هماهنگی حرکت پس‌زمینه با دنده جلو و دنده عقب
-          - حذف کامل هرگونه نشان یا برچسب پلتفرم
-        files: app/build/outputs/apk/debug/app-debug.apk
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.2
+          name: "Hill Hop Horizon APK v1.2 (منوی جدید، ۱۰ ماشین جدید، فیزیک و موسیقی)"
+          body: |
+            نسخه v1.2 بازی تپه‌نورد (Hill Hop Horizon) - کاملاً آفلاین و بدون نیاز به اینترنت.
+            
+            ویژگی‌های جدید:
+            - اضافه شدن ۱۰ ماشین جدید از روی تصویر (ماسل‌کار، مانستر تراک، ماشین پلیس، آتش‌نشانی، فولکس ۵۳ و هایپرکارها) با مشخصات و ارتقای اختصاصی
+            - بازطراحی منو با تب‌های تفکیک‌شده (شروع، گاراژ، ارتقا، نقشه‌ها، تنظیمات)
+            - اصلاح فیزیک پرش‌ها و سنگین‌تر شدن فرودها + زوم‌اوت هوشمند دوربین در سرعت بالا
+            - سیستم موسیقی دوگانه (موزیک منو + موزیک داخل بازی) همراه با تنظیم بلندی صدا
+            - جاده‌های پویا و تصادفی در هر بار شروع
+            - هماهنگی حرکت پس‌زمینه با دنده جلو و دنده عقب
+            - حذف کامل هرگونه نشان یا برچسب پلتفرم
+          files: app/build/outputs/apk/debug/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
