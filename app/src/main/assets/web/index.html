@@ -225,32 +225,5 @@
 		</svg>
 	</button>
 </aside>
-<script>
-	(() => {
-		if (window.self !== window.top || navigator.userAgent.includes('puppeteer')) {
-			const badge = document.querySelector('#lovable-badge');
-			if (badge) {
-				badge.style.display = 'none';
-			}
-			return;
-		}
 
-		const closeButton = document.querySelector('#lovable-badge-close');
-		if (closeButton) {
-			closeButton.addEventListener('click', function(event) {
-				event.preventDefault();
-				event.stopPropagation();
-				const badge = document.querySelector('#lovable-badge');
-				if (badge) {
-					badge.classList.add('closing');
-					setTimeout(function() {
-						if (badge) {
-							badge.style.display = 'none';
-						}
-					}, 240);
-				}
-			});
-		}
-	})();
-</script>
 </body></html>
