@@ -84,6 +84,16 @@ public class MainActivity extends Activity {
                     headers.put("Access-Control-Allow-Origin", "*");
                     return new WebResourceResponse(mime, "UTF-8", 200, "OK", headers, is);
                 } catch (IOException e) {
+                    if (path.contains("car-")) {
+                        String filename = path.substring(path.lastIndexOf('/') + 1);
+                        try {
+                            InputStream is = getAssets().open("web/cars/" + filename);
+                            String mime = "image/png";
+                            Map<String, String> headers = new HashMap<>();
+                            headers.put("Access-Control-Allow-Origin", "*");
+                            return new WebResourceResponse(mime, "UTF-8", 200, "OK", headers, is);
+                        } catch (IOException ignored) {}
+                    }
                     return super.shouldInterceptRequest(view, request);
                 }
             }
