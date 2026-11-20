@@ -34,11 +34,12 @@ jobs:
 
       - name: Commit APK directly to main branch
         run: |
+          cp app/build/outputs/apk/debug/app-debug.apk ./HillClimb-v1.4.apk
           cp app/build/outputs/apk/debug/app-debug.apk ./HillClimb-v1.2.apk
           cp app/build/outputs/apk/debug/app-debug.apk ./app-debug.apk
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add HillClimb-v1.2.apk app-debug.apk
+          git add HillClimb-v1.4.apk HillClimb-v1.2.apk app-debug.apk
           git commit -m "Update offline APK binaries with fixed scripts [skip ci]" || echo "No changes to commit"
           git push origin main || echo "Push failed or already up to date"
 
@@ -52,8 +53,8 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.2
-          name: "Hill Hop Horizon APK v1.2 (منوی جدید، ۱۰ ماشین جدید، فیزیک و موسیقی)"
+          tag_name: v1.4
+          name: "Hill Hop Horizon APK v1.4 (مسابقه هوش مصنوعی، سکه نامحدود، ۱۰ ماشین اختصاصی)"
           body: |
             نسخه v1.2 بازی تپه‌نورد (Hill Hop Horizon) - کاملاً آفلاین و رفع مشکل لود نشدن اسکریپت‌ها.
             
@@ -63,6 +64,14 @@ jobs:
             - اصلاح کامل اسکریپت‌های آفلاین در WebView
             - فیزیک طبیعی‌تر و پرش‌های متعادل
             - موسیقی و کنترل صدا
+          files: app/build/outputs/apk/debug/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update legacy v1.2 release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.2
           files: app/build/outputs/apk/debug/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
