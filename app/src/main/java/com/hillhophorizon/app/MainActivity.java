@@ -61,8 +61,13 @@ public class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
-                // Allow synthetic localhost scheme
-                handler.proceed();
+                // Only allow synthetic localhost scheme used internally for assets
+                String url = error != null ? error.getUrl() : null;
+                if (url != null && (url.startsWith("https://localhost/") || url.startsWith("https://localhost:"))) {
+                    handler.proceed();
+                } else {
+                    handler.cancel();
+                }
             }
 
             @Override
