@@ -54,7 +54,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.4
-          name: "Hill Hop Horizon APK v1.4 (مسابقه هوش مصنوعی، سکه نامحدود، ۱۰ ماشین اختصاصی)"
+          name: "Hill Hop Horizon APK v1.5 (اصلاح کامل فیزیک، تقویت حساب‌شده، رفع حریف‌های هوش مصنوعی و گرافیک غروب)"
           body: |
             نسخه v1.2 بازی تپه‌نورد (Hill Hop Horizon) - کاملاً آفلاین و رفع مشکل لود نشدن اسکریپت‌ها.
             
