@@ -34,12 +34,13 @@ jobs:
 
       - name: Commit APK directly to main branch
         run: |
+          cp app/build/outputs/apk/debug/app-debug.apk ./HillClimb-v1.6.apk
           cp app/build/outputs/apk/debug/app-debug.apk ./HillClimb-v1.4.apk
           cp app/build/outputs/apk/debug/app-debug.apk ./HillClimb-v1.2.apk
           cp app/build/outputs/apk/debug/app-debug.apk ./app-debug.apk
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add HillClimb-v1.4.apk HillClimb-v1.2.apk app-debug.apk
+          git add HillClimb-v1.6.apk HillClimb-v1.4.apk HillClimb-v1.2.apk app-debug.apk
           git commit -m "Update offline APK binaries with fixed scripts [skip ci]" || echo "No changes to commit"
           git push origin main || echo "Push failed or already up to date"
 
@@ -53,8 +54,8 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.4
-          name: "Hill Hop Horizon APK v1.5 (اصلاح کامل فیزیک، تقویت حساب‌شده، رفع حریف‌های هوش مصنوعی و گرافیک غروب)"
+          tag_name: v1.6
+          name: "Hill Hop Horizon APK v1.6 (حالت جذاب زامبی با افکت‌های خرد شدن، اصلاح اساسی فیزیک و حذف مسابقه چندنفره)"
           body: |
             نسخه v1.2 بازی تپه‌نورد (Hill Hop Horizon) - کاملاً آفلاین و رفع مشکل لود نشدن اسکریپت‌ها.
             
