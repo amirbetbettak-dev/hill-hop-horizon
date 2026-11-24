@@ -13751,8 +13751,6 @@ function _s({
                   children: [`کومبو x`, Io(v.zombieCombo)],
                 }),
             ],
-          })
-            ],
           }),
         (0, $.jsxs)(`div`, {
           className: `pointer-events-none absolute left-3 top-3 flex flex-col gap-2`,

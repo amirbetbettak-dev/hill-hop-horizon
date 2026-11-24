@@ -55,7 +55,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.6
-          name: "Hill Hop Horizon APK v1.6 (حالت جذاب زامبی با افکت‌های خرد شدن، اصلاح اساسی فیزیک و حذف مسابقه چندنفره)"
+          name: "Hill Hop Horizon APK v1.6.1 (رفع کامل کرش صفحه آبی، اجرای تست‌شده بدون خطا، حالت زامبی و فیزیک پایدار)"
           body: |
             نسخه v1.2 بازی تپه‌نورد (Hill Hop Horizon) - کاملاً آفلاین و رفع مشکل لود نشدن اسکریپت‌ها.
             
