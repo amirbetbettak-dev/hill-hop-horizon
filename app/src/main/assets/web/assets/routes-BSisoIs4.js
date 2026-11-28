@@ -10997,7 +10997,12 @@ var Fo = class {
     front;
     rearJoint;
     frontJoint;
-    input = { gas: !1, brake: !1 };
+    input = { gas: !1, brake: !1, shoot: !1 };
+    weaponCooldown = 0;
+    weaponHeat = 0;
+    muzzleFlash = 0;
+    projectiles = [];
+    casings = [];
     fuel;
     maxFuel;
     distance = 0;
@@ -11068,7 +11073,14 @@ var Fo = class {
           roughness: e.roughness * (0.85 + t() * 0.3),
         });
       }
-      ((this.stats = wo(t, n)),
+      this.weapon = t.weapon || t.custom?.weapon || "minigun";
+        this.weaponStats = t.weaponStats || t.custom?.weaponStats || { damage: 1, fireRate: 1, cooling: 1, impact: 1 };
+        this.projectiles = [];
+        this.casings = [];
+        this.weaponCooldown = 0;
+        this.weaponHeat = 0;
+        this.muzzleFlash = 0;
+        ((this.stats = wo(t, n)),
         (this.fuel = this.maxFuel = this.stats.fuel),
         (this.rng = Po(e.seed * 7919 + (i ?? 0))),
         (this.nextFuelX = ko(0)));
@@ -11295,9 +11307,9 @@ var Fo = class {
           let zx = this.nextZombieX;
           let zy = this.height(zx);
           let rngVal = Math.random();
-          let zType = zx > 120 && rngVal < 0.22 ? "brute" : rngVal < 0.55 ? "crawler" : "walker";
-          let baseHp = zType === "brute" ? 280 : zType === "crawler" ? 80 : 120;
-          let baseCoins = zType === "brute" ? 350 : zType === "crawler" ? 120 : 150;
+          let zType = zx > 110 && rngVal < 0.2 ? "brute" : rngVal < 0.45 ? "mutant" : rngVal < 0.72 ? "crawler" : "walker";
+          let baseHp = zType === "brute" ? 320 : zType === "mutant" ? 160 : zType === "crawler" ? 80 : 120;
+          let baseCoins = zType === "brute" ? 400 : zType === "mutant" ? 220 : zType === "crawler" ? 120 : 150;
           this.zombies.push({
             x: zx,
             y: zy,
@@ -11335,6 +11347,176 @@ var Fo = class {
         }
         this.zombieLimbs = this.zombieLimbs.filter((l) => l.life < 4.5 && l.x > pX - 50);
         this.bloodSplats = this.bloodSplats.filter((b) => b.x > pX - 60);
+
+        // WEAPON SHOOTING LOGIC
+        if (this.weaponCooldown > 0) this.weaponCooldown -= Ao;
+        if (this.muzzleFlash > 0) this.muzzleFlash -= Ao;
+        this.vehicle.muzzleFlash = this.muzzleFlash;
+        if (this.weaponHeat > 0) this.weaponHeat = Math.max(0, this.weaponHeat - 18 * Ao);
+
+        let wpType = this.weapon || "minigun";
+        let wpLvl = this.weaponStats || { damage: 1, fireRate: 1, cooling: 1, impact: 1 };
+        let dmgMultiplier = 1 + (wpLvl.damage - 1) * 0.22;
+        let rateMultiplier = 1 + (wpLvl.fireRate - 1) * 0.12;
+
+        if (this.input.shoot && !this.ended && this.weaponCooldown <= 0 && this.weaponHeat < 95) {
+          let cPos = this.chassis.getPosition();
+          let cAng = this.chassis.getAngle();
+          let cVel = this.chassis.getLinearVelocity();
+          let fwdX = Math.cos(cAng);
+          let fwdY = Math.sin(cAng);
+          let upX = -Math.sin(cAng);
+          let upY = Math.cos(cAng);
+
+          // Roof mount origin
+          let mountX = cPos.x + fwdX * 0.2 + upX * 0.85;
+          let mountY = cPos.y + fwdY * 0.2 + upY * 0.85;
+
+          if (wpType === "missile") {
+            this.projectiles.push({
+              x: mountX,
+              y: mountY,
+              vx: cVel.x + fwdX * 48,
+              vy: cVel.y + fwdY * 48,
+              damage: 260 * dmgMultiplier,
+              type: "missile",
+              blastRadius: 4.8 * (1 + (wpLvl.impact - 1) * 0.1),
+              life: 3.5,
+            });
+            this.weaponCooldown = 0.45 / rateMultiplier;
+            this.weaponHeat += 22 / (1 + (wpLvl.cooling - 1) * 0.15);
+            this.onEvent?.("shoot", "missile");
+          } else if (wpType === "plasma") {
+            this.projectiles.push({
+              x: mountX,
+              y: mountY,
+              vx: cVel.x + fwdX * 72,
+              vy: cVel.y + fwdY * 72,
+              damage: 105 * dmgMultiplier,
+              type: "plasma",
+              life: 2.5,
+            });
+            this.weaponCooldown = 0.13 / rateMultiplier;
+            this.weaponHeat += 7.5 / (1 + (wpLvl.cooling - 1) * 0.15);
+            this.onEvent?.("shoot", "plasma");
+          } else if (wpType === "autocannon") {
+            this.projectiles.push({
+              x: mountX,
+              y: mountY,
+              vx: cVel.x + fwdX * 85,
+              vy: cVel.y + fwdY * 85,
+              damage: 155 * dmgMultiplier,
+              type: "heavy_bullet",
+              life: 2.8,
+            });
+            this.weaponCooldown = 0.2 / rateMultiplier;
+            this.weaponHeat += 11 / (1 + (wpLvl.cooling - 1) * 0.15);
+            this.onEvent?.("shoot", "autocannon");
+          } else {
+            // Minigun
+            this.projectiles.push({
+              x: mountX,
+              y: mountY,
+              vx: cVel.x + fwdX * 76 + (Math.random() - 0.5) * 3,
+              vy: cVel.y + fwdY * 76 + (Math.random() - 0.5) * 3,
+              damage: 48 * dmgMultiplier,
+              type: "bullet",
+              life: 2.2,
+            });
+            this.weaponCooldown = 0.08 / rateMultiplier;
+            this.weaponHeat += 3.8 / (1 + (wpLvl.cooling - 1) * 0.15);
+            this.onEvent?.("shoot", "minigun");
+          }
+
+          this.muzzleFlash = 0.06;
+          this.shake = Math.min(1.2, this.shake + 0.12);
+
+          // Eject shell casing
+          if (wpType !== "plasma") {
+            this.casings.push({
+              x: mountX - fwdX * 0.3,
+              y: mountY,
+              vx: cVel.x - fwdX * (3 + Math.random() * 3) + upX * (4 + Math.random() * 4),
+              vy: cVel.y - fwdY * 2 + upY * (4 + Math.random() * 4),
+              rot: Math.random() * Math.PI * 2,
+              vrot: (Math.random() - 0.5) * 25,
+              life: 0,
+            });
+          }
+        }
+
+        // UPDATE SHELL CASINGS
+        for (let c of this.casings) {
+          c.x += c.vx * Ao;
+          c.y += c.vy * Ao;
+          c.vy -= 18 * Ao;
+          c.rot += c.vrot * Ao;
+          c.life += Ao;
+          let gY = this.height(c.x);
+          if (c.y < gY + 0.05) {
+            c.y = gY + 0.05;
+            c.vy = -c.vy * 0.3;
+            c.vx *= 0.5;
+            c.vrot *= 0.4;
+          }
+        }
+        this.casings = this.casings.filter((c) => c.life < 2.5 && c.x > pX - 40);
+
+        // UPDATE PROJECTILES & HIT TESTS
+        for (let p of this.projectiles) {
+          p.x += p.vx * Ao;
+          p.y += p.vy * Ao;
+          p.life -= Ao;
+          let gY = this.height(p.x);
+
+          // Terrain hit
+          if (p.y <= gY + 0.1) {
+            p.life = 0;
+            if (p.type === "missile") {
+              this.onEvent?.("explosion");
+              this.shake = Math.min(2.0, this.shake + 0.6);
+              // AoE damage
+              for (let z of this.zombies) {
+                if (!z.alive) continue;
+                let dExpl = Math.hypot(z.x - p.x, z.y - p.y);
+                if (dExpl <= p.blastRadius) {
+                  let blastDmg = p.damage * (1 - dExpl / p.blastRadius);
+                  z.hp -= blastDmg;
+                  z.hitCooldown = 0.2;
+                }
+              }
+            }
+          }
+
+          // Zombie direct hit test
+          for (let z of this.zombies) {
+            if (!z.alive || p.life <= 0) continue;
+            let zH = z.type === "brute" ? 2.2 : z.type === "crawler" ? 0.75 : 1.6;
+            let zW = z.type === "brute" ? 1.1 : 0.65;
+            let dZ = Math.hypot(p.x - z.x, p.y - (z.y + zH * 0.5));
+            if (dZ < zW + 0.3) {
+              p.life = 0;
+              z.hp -= p.damage;
+              z.hitCooldown = 0.15;
+              this.onEvent?.("zombie_hit");
+              this.shake = Math.min(1.5, this.shake + 0.2);
+
+              if (p.type === "missile") {
+                this.onEvent?.("explosion");
+                for (let otherZ of this.zombies) {
+                  if (!otherZ.alive) continue;
+                  let dExp = Math.hypot(otherZ.x - p.x, otherZ.y - p.y);
+                  if (dExp <= p.blastRadius) {
+                    otherZ.hp -= p.damage * (1 - dExp / p.blastRadius);
+                    otherZ.hitCooldown = 0.2;
+                  }
+                }
+              }
+              break;
+            }
+          }
+        }
+        this.projectiles = this.projectiles.filter((p) => p.life > 0 && p.x < pX + 110);
 
         let carPos = this.chassis.getPosition(),
           carVel = this.chassis.getLinearVelocity(),
@@ -12470,6 +12652,120 @@ function es(e, t, n, r) {
     e.rotate(-n.angle),
     e.scale(r, -r),
     qo(e, t),
+    (() => {
+      // High-Detail Mounted Heavy Weapon on Vehicle
+      let curWp = t.weapon || t.custom?.weapon || "minigun";
+      let wX = 0.15;
+      let wY = (t.head ? t.head.y : 0.72) + 0.12;
+      // 1. Turret ring & mount base
+      e.fillStyle = "#1e242b";
+      e.beginPath();
+      e.roundRect(wX - 0.28, wY - 0.12, 0.56, 0.14, 0.04);
+      e.fill();
+      e.fillStyle = "#333d47";
+      e.beginPath();
+      e.arc(wX, wY - 0.02, 0.14, 0, Math.PI * 2);
+      e.fill();
+
+      if (curWp === "minigun") {
+        // Heavy Vulcan M134 Rotary Minigun
+        e.fillStyle = "#161a1f";
+        e.beginPath();
+        e.roundRect(wX - 0.22, wY - 0.05, 0.44, 0.24, 0.04);
+        e.fill();
+        e.fillStyle = "#b48608";
+        e.fillRect(wX - 0.18, wY - 0.12, 0.12, 0.08);
+        e.fillStyle = "#2d3748";
+        e.fillRect(wX + 0.2, wY - 0.02, 0.15, 0.18);
+        e.fillRect(wX + 0.55, wY - 0.02, 0.12, 0.18);
+        e.fillStyle = "#0f172a";
+        e.fillRect(wX + 0.2, wY + 0.08, 0.65, 0.04);
+        e.fillRect(wX + 0.2, wY + 0.02, 0.68, 0.05);
+        e.fillRect(wX + 0.2, wY - 0.04, 0.65, 0.04);
+        if (t.muzzleFlash && t.muzzleFlash > 0) {
+          let mfX = wX + 0.95, mfY = wY + 0.04;
+          let rad = 0.28 + Math.random() * 0.15;
+          e.fillStyle = "#ffcc00";
+          e.beginPath();
+          e.arc(mfX, mfY, rad, 0, Math.PI * 2);
+          e.fill();
+          e.fillStyle = "#ff3300";
+          e.beginPath();
+          e.arc(mfX, mfY, rad * 0.55, 0, Math.PI * 2);
+          e.fill();
+        }
+      } else if (curWp === "autocannon") {
+        // 30mm Anti-Armor Heavy Autocannon
+        e.fillStyle = "#181b20";
+        e.beginPath();
+        e.roundRect(wX - 0.25, wY - 0.06, 0.55, 0.26, 0.04);
+        e.fill();
+        e.fillStyle = "#374151";
+        e.fillRect(wX - 0.12, wY + 0.18, 0.22, 0.2);
+        e.fillStyle = "#4b5563";
+        e.fillRect(wX + 0.28, wY + 0.01, 0.18, 0.14);
+        e.fillStyle = "#111827";
+        e.fillRect(wX + 0.28, wY + 0.03, 0.82, 0.09);
+        e.fillStyle = "#1f2937";
+        e.fillRect(wX + 1.05, wY - 0.01, 0.18, 0.17);
+        if (t.muzzleFlash && t.muzzleFlash > 0) {
+          let mfX = wX + 1.32, mfY = wY + 0.07;
+          e.fillStyle = "#ff5500";
+          e.beginPath();
+          e.moveTo(mfX, mfY - 0.25);
+          e.lineTo(mfX + 0.5, mfY);
+          e.lineTo(mfX, mfY + 0.25);
+          e.closePath();
+          e.fill();
+        }
+      } else if (curWp === "plasma") {
+        // Dual Photon Plasma Blaster
+        e.fillStyle = "#0c1322";
+        e.beginPath();
+        e.roundRect(wX - 0.24, wY - 0.07, 0.52, 0.28, 0.06);
+        e.fill();
+        e.fillStyle = "#00e5ff";
+        e.beginPath();
+        e.roundRect(wX - 0.14, wY + 0.02, 0.26, 0.12, 0.03);
+        e.fill();
+        e.fillStyle = "#1e293b";
+        e.fillRect(wX + 0.25, wY + 0.11, 0.65, 0.06);
+        e.fillRect(wX + 0.25, wY - 0.03, 0.65, 0.06);
+        e.fillStyle = "#38bdf8";
+        e.fillRect(wX + 0.45, wY - 0.05, 0.08, 0.24);
+        e.fillRect(wX + 0.72, wY - 0.05, 0.08, 0.24);
+        if (t.muzzleFlash && t.muzzleFlash > 0) {
+          let mfX = wX + 0.98, mfY = wY + 0.04;
+          e.fillStyle = "#00f0ff";
+          e.beginPath();
+          e.arc(mfX, mfY, 0.32, 0, Math.PI * 2);
+          e.fill();
+        }
+      } else if (curWp === "missile") {
+        // Quad Micro-Missile Pod
+        e.fillStyle = "#27272a";
+        e.beginPath();
+        e.roundRect(wX - 0.3, wY - 0.1, 0.65, 0.38, 0.05);
+        e.fill();
+        e.fillStyle = "#eab308";
+        e.fillRect(wX - 0.28, wY + 0.06, 0.6, 0.05);
+        e.fillStyle = "#09090b";
+        e.fillRect(wX + 0.32, wY + 0.12, 0.18, 0.12);
+        e.fillRect(wX + 0.32, wY - 0.04, 0.18, 0.12);
+        e.fillStyle = "#ef4444";
+        e.beginPath();
+        e.arc(wX + 0.42, wY + 0.18, 0.05, 0, Math.PI * 2);
+        e.arc(wX + 0.42, wY + 0.02, 0.05, 0, Math.PI * 2);
+        e.fill();
+        if (t.muzzleFlash && t.muzzleFlash > 0) {
+          let mfX = wX + 0.55, mfY = wY + 0.1;
+          e.fillStyle = "#f97316";
+          e.beginPath();
+          e.arc(mfX, mfY, 0.35, 0, Math.PI * 2);
+          e.fill();
+        }
+      }
+    })(),
     e.restore());
   let i =
       t.kind === `monster` ||
@@ -12911,6 +13207,66 @@ function cs(e, t, n, r) {
       e.fill();
     }
   }
+  // DRAW PROJECTILES
+  if (t.projectiles && t.projectiles.length > 0) {
+    for (let p of t.projectiles) {
+      if (p.x < h || p.x > g) continue;
+      let px = f(p.x), py = p(p.y);
+      e.save();
+      e.translate(px, py);
+      e.rotate(Math.atan2(-p.vy, p.vx));
+      if (p.type === "missile") {
+        e.fillStyle = "#374151";
+        e.fillRect(-0.4 * s, -0.08 * s, 0.7 * s, 0.16 * s);
+        e.fillStyle = "#ef4444";
+        e.beginPath();
+        e.moveTo(0.3 * s, -0.08 * s);
+        e.lineTo(0.55 * s, 0);
+        e.lineTo(0.3 * s, 0.08 * s);
+        e.closePath();
+        e.fill();
+        e.fillStyle = "#f97316";
+        e.beginPath();
+        e.moveTo(-0.4 * s, -0.06 * s);
+        e.lineTo(-0.75 * s - Math.random() * 0.3 * s, 0);
+        e.lineTo(-0.4 * s, 0.06 * s);
+        e.closePath();
+        e.fill();
+      } else if (p.type === "plasma") {
+        e.fillStyle = "#00e5ff";
+        e.beginPath();
+        e.ellipse(0, 0, 0.45 * s, 0.12 * s, 0, 0, Math.PI * 2);
+        e.fill();
+        e.fillStyle = "#ffffff";
+        e.beginPath();
+        e.ellipse(0, 0, 0.22 * s, 0.06 * s, 0, 0, Math.PI * 2);
+        e.fill();
+      } else {
+        e.strokeStyle = p.type === "heavy_bullet" ? "#ff4500" : "#ffcc00";
+        e.lineWidth = (p.type === "heavy_bullet" ? 0.1 : 0.06) * s;
+        e.beginPath();
+        e.moveTo(-0.4 * s, 0);
+        e.lineTo(0.3 * s, 0);
+        e.stroke();
+      }
+      e.restore();
+    }
+  }
+
+  // DRAW CASINGS
+  if (t.casings && t.casings.length > 0) {
+    for (let c of t.casings) {
+      if (c.x < h || c.x > g) continue;
+      let cx = f(c.x), cy = p(c.y);
+      e.save();
+      e.translate(cx, cy);
+      e.rotate(c.rot);
+      e.fillStyle = "#d4af37";
+      e.fillRect(-0.06 * s, -0.02 * s, 0.12 * s, 0.04 * s);
+      e.restore();
+    }
+  }
+
   if (t.zombies && t.zombies.length > 0) {
     for (let z of t.zombies) {
       if (!z.alive || z.x < h || z.x > g) continue;
@@ -13610,7 +13966,9 @@ function _s({
                     ? i.crash()
                     : e === `zombie_hit`
                       ? i.zombieHit()
-                      : e === `zombie_groan` && i.zombieGroan();
+                      : e === `zombie_groan` ? i.zombieGroan() :
+       e === `shoot` ? i.shootSound(t) :
+       e === `explosion` && i.explosionSound();
       }));
     let s = c.current,
       l = u.current,
@@ -13694,6 +14052,7 @@ function _s({
         let n = t.key.toLowerCase();
         if (n === `arrowright` || n === `d`) o.input.gas = e;
         else if (n === `arrowleft` || n === `a`) o.input.brake = e;
+        else if (n === ` ` || n === `space` || n === `z` || n === `x` || n === `s` || n === `arrowup`) o.input.shoot = e;
         else if (e && (n === `escape` || n === `p`)) T();
         else return;
         (e && i.start(), t.preventDefault());
@@ -13808,26 +14167,62 @@ function _s({
         (0, $.jsx)(`button`, {
           "aria-label": `ترمز`,
           ...E(`brake`),
-          className: `btn-game absolute bottom-5 left-4 flex h-24 w-24 items-end justify-center bg-accent pb-2 text-xl text-accent-foreground sm:h-28 sm:w-32`,
+          className: `glass-pedal absolute flex flex-col items-center justify-center rounded-2xl border-2 border-white/40 bg-white/15 backdrop-blur-md shadow-2xl active:scale-95 active:bg-red-500/30 transition-all select-none touch-none`,
           style: {
             position: `absolute`,
             bottom: `20px`,
             left: `20px`,
+            width: `84px`,
+            height: `84px`,
             zIndex: 30,
           },
-          children: `ترمز`,
+          children: (0, $.jsxs)(`div`, {
+            className: `flex flex-col items-center justify-center pointer-events-none opacity-85`,
+            children: [
+              (0, $.jsx)(`div`, { className: `h-1.5 w-10 rounded-full bg-white/70 mb-1.5` }),
+              (0, $.jsx)(`div`, { className: `h-1.5 w-10 rounded-full bg-white/70 mb-1.5` }),
+              (0, $.jsx)(`div`, { className: `h-1.5 w-10 rounded-full bg-white/70` }),
+            ],
+          }),
+        }),
+        (0, $.jsx)(`button`, {
+          "aria-label": `شلیک`,
+          ...E(`shoot`),
+          className: `glass-shoot absolute flex items-center justify-center rounded-full border-2 border-red-500/70 bg-red-600/25 backdrop-blur-md shadow-[0_0_20px_rgba(239,68,68,0.5)] active:scale-90 active:bg-red-600/60 transition-all select-none touch-none`,
+          style: {
+            position: `absolute`,
+            bottom: `160px`,
+            right: `24px`,
+            width: `72px`,
+            height: `72px`,
+            zIndex: 30,
+          },
+          children: (0, $.jsx)(`span`, {
+            className: `text-3xl filter drop-shadow-[0_0_8px_#ef4444] pointer-events-none select-none`,
+            children: `🎯`,
+          }),
         }),
         (0, $.jsx)(`button`, {
           "aria-label": `گاز`,
           ...E(`gas`),
-          className: `btn-game absolute bottom-5 right-4 flex h-32 w-20 items-end justify-center bg-secondary pb-2 text-xl text-secondary-foreground sm:h-40 sm:w-24`,
+          className: `glass-pedal absolute flex flex-col items-center justify-center rounded-2xl border-2 border-white/40 bg-white/15 backdrop-blur-md shadow-2xl active:scale-95 active:bg-green-500/30 transition-all select-none touch-none`,
           style: {
             position: `absolute`,
             bottom: `20px`,
             right: `20px`,
+            width: `80px`,
+            height: `125px`,
             zIndex: 30,
           },
-          children: `گاز`,
+          children: (0, $.jsxs)(`div`, {
+            className: `flex flex-col items-center justify-center pointer-events-none opacity-85 gap-2`,
+            children: [
+              (0, $.jsx)(`div`, { className: `h-1.5 w-11 rounded-full bg-white/70` }),
+              (0, $.jsx)(`div`, { className: `h-1.5 w-11 rounded-full bg-white/70` }),
+              (0, $.jsx)(`div`, { className: `h-1.5 w-11 rounded-full bg-white/70` }),
+              (0, $.jsx)(`div`, { className: `h-1.5 w-11 rounded-full bg-white/70` }),
+            ],
+          }),
         }),
         (g || C) &&
           (0, $.jsx)(`div`, {
@@ -13936,14 +14331,14 @@ var vs = `tappeh-navard-v1`,
   ys = [
     { id: `start`, label: `شروع`, icon: b },
     { id: `garage`, label: `گاراژ`, icon: f },
-    { id: `custom`, label: `اسپرت`, icon: Cu },
+    { id: `weapons`, label: `زرادخانه`, icon: Cu },
     { id: `upgrades`, label: `ارتقا`, icon: w },
     { id: `maps`, label: `نقشه‌ها`, icon: _ },
     { id: `settings`, label: `تنظیمات`, icon: S },
   ];
 function bs({ v: e, className: t = `h-24` }) {
   let n = (0, l.useRef)(null);
-  let k = `${e.id}-${e.custom?.rim || ""}-${e.custom?.spoiler || ""}-${e.custom?.decal || ""}`;
+  let k = `${e.id}-${e.custom?.weapon || ""}-${e.weapon || ""}-${e.custom?.rim || ""}`;
   (0, l.useEffect)(() => {
     let t = !0;
     return (
@@ -14263,17 +14658,25 @@ function Cs() {
                       );
                     }),
                 }),
-              o === `custom` &&
+              o === `weapons` &&
                 (0, $.jsxs)(`div`, {
                   className: `flex flex-col gap-3`,
                   children: [
                     (0, $.jsxs)(`div`, {
-                      className: `panel-game bg-card p-3 text-center`,
+                      className: `panel-game bg-card p-3 text-center shadow-lg border border-primary/30`,
                       children: [
-                        (0, $.jsx)(bs, { v: m, className: `h-28` }),
+                        (0, $.jsx)(bs, { v: m, className: `h-32` }),
                         (0, $.jsxs)(`div`, {
-                          className: `font-display text-2xl text-foreground`,
-                          children: [m.name, ` · اسپرت`],
+                          className: `font-display text-2xl text-foreground mt-1 flex items-center justify-center gap-2`,
+                          children: [
+                            (0, $.jsx)(`span`, { className: `text-primary font-bold`, children: `⚔️` }),
+                            m.name,
+                            ` · زرادخانه و تجهیز سلاح`,
+                          ],
+                        }),
+                        (0, $.jsx)(`p`, {
+                          className: `text-xs text-muted-foreground mt-0.5`,
+                          children: `سلاح دلخواه را انتخاب و ارتقا دهید تا روی سقف خودرو نصب و آماده شلیک در بازی شود`,
                         }),
                       ],
                     }),
@@ -14281,86 +14684,87 @@ function Cs() {
                       className: `panel-game bg-card p-3`,
                       children: [
                         (0, $.jsx)(`div`, {
-                          className: `mb-2 font-display text-lg text-primary`,
-                          children: `رنگ رینگ چرخ`,
+                          className: `mb-2 font-display text-lg text-primary flex items-center justify-between`,
+                          children: [
+                            (0, $.jsx)(`span`, { children: `انتخاب سلاح سنگین نصب‌شده روی خودرو` }),
+                            (0, $.jsx)(`span`, { className: `text-xs text-secondary font-bold`, children: `آماده نبرد` }),
+                          ],
                         }),
                         (0, $.jsx)(`div`, {
-                          className: `grid grid-cols-5 gap-2`,
+                          className: `grid grid-cols-1 sm:grid-cols-2 gap-2.5`,
                           children: [
                             {
-                              id: `#eef2f6`,
-                              name: `نقره‌ای`,
-                              p: 0,
-                              c: `#eef2f6`,
+                              id: `minigun`,
+                              name: `تیربار روتاری ۶ لول ولکان M134`,
+                              desc: `نرخ شلیک دیوانه‌وار ۷.۶۲ میلیمتری، عالی برای قلع‌وقمع لشکرهای زامبی`,
+                              badge: `سرعت آتش بالا`,
+                              color: `#ffcc00`,
                             },
                             {
-                              id: `#ffd700`,
-                              name: `طلایی`,
-                              p: 120,
-                              c: `#ffd700`,
+                              id: `autocannon`,
+                              name: `توپ سنگین ۳۰ میلیمتری ضد زره`,
+                              desc: `پرتابه‌های کالیبر سنگین تخریب‌گر با لگد سنگین و نصف‌کردن زامبی‌های غول‌آسا`,
+                              badge: `تخریب سنگین`,
+                              color: `#ff4400`,
                             },
                             {
-                              id: `#23272e`,
-                              name: `مشکی`,
-                              p: 150,
-                              c: `#23272e`,
+                              id: `plasma`,
+                              name: `توپ دوگانه پلاسما فوتونی`,
+                              desc: `پرتوهای فوق‌حرارتی متراکم نئونی که گوشت و استخوان زامبی را بخار می‌کند`,
+                              badge: `فناوری پیشرفته`,
+                              color: `#00e5ff`,
                             },
                             {
-                              id: `#ff3b30`,
-                              name: `قرمز`,
-                              p: 180,
-                              c: `#ff3b30`,
+                              id: `missile`,
+                              name: `راکت‌انداز تهاجمی ۴ لول هایپرباریک`,
+                              desc: `شلیک راکت‌های انفجاری با موج انفجار وسیع و متلاشی‌کردن دسته‌جمعی`,
+                              badge: `تخریب منطقه‌ای`,
+                              color: `#ef4444`,
                             },
-                            {
-                              id: `#00e5ff`,
-                              name: `نئون`,
-                              p: 220,
-                              c: `#00e5ff`,
-                            },
-                          ].map((n) => {
-                            let r = (m.custom?.rim || `#eef2f6`) === n.id;
+                          ].map((wp) => {
+                            let isEquipped = (m.weapon || m.custom?.weapon || `minigun`) === wp.id;
                             return (0, $.jsxs)(`button`, {
-                              key: n.id,
+                              key: wp.id,
                               onClick: () => {
-                                let i = m.custom?.rimOwned || [`#eef2f6`];
-                                if (i.includes(n.id)) {
-                                  let r = {
-                                    ...(e.custom || {}),
-                                    [m.id]: { ...(m.custom || {}), rim: n.id },
-                                  };
-                                  t({ ...e, custom: r });
-                                } else if (e.coins >= n.p) {
-                                  let a = [...i, n.id],
-                                    r = {
-                                      ...(e.custom || {}),
-                                      [m.id]: {
-                                        ...(m.custom || {}),
-                                        rim: n.id,
-                                        rimOwned: a,
-                                      },
-                                    };
-                                  t({ ...e, coins: e.coins - n.p, custom: r });
-                                }
+                                let curCustom = e.custom || {};
+                                let carCustom = curCustom[m.id] || {};
+                                let newCustom = {
+                                  ...curCustom,
+                                  [m.id]: { ...carCustom, weapon: wp.id },
+                                };
+                                t({ ...e, custom: newCustom });
                               },
-                              className: `flex flex-col items-center gap-1 rounded-lg border-2 p-1.5 transition-all ${r ? `border-primary bg-primary/20` : `border-outline bg-muted/40`}`,
+                              className: `flex flex-col text-right rounded-xl border-2 p-3 transition-all ${isEquipped ? `border-primary bg-primary/20 shadow-md scale-[1.01]` : `border-outline bg-muted/40 hover:bg-muted/70`}`,
                               children: [
-                                (0, $.jsx)(`span`, {
-                                  className: `size-6 rounded-full border border-white/40 shadow-sm`,
-                                  style: { backgroundColor: n.c },
+                                (0, $.jsxs)(`div`, {
+                                  className: `flex items-center justify-between gap-2`,
+                                  children: [
+                                    (0, $.jsx)(`span`, {
+                                      className: `font-display text-base font-bold text-foreground`,
+                                      children: wp.name,
+                                    }),
+                                    (0, $.jsx)(`span`, {
+                                      className: `rounded-md px-2 py-0.5 text-[10px] font-bold ${isEquipped ? `bg-primary text-primary-foreground` : `bg-black/30 text-muted-foreground`}`,
+                                      children: isEquipped ? `نصب شده ✔` : `انتخاب`,
+                                    }),
+                                  ],
                                 }),
-                                (0, $.jsx)(`span`, {
-                                  className: `text-xs font-display`,
-                                  children: n.name,
+                                (0, $.jsx)(`p`, {
+                                  className: `text-xs text-muted-foreground mt-1 line-clamp-2`,
+                                  children: wp.desc,
                                 }),
-                                (0, $.jsx)(`span`, {
-                                  className: `text-[10px] text-muted-foreground`,
-                                  children: (
-                                    m.custom?.rimOwned || [`#eef2f6`]
-                                  ).includes(n.id)
-                                    ? `داری`
-                                    : n.p === 0
-                                      ? `رایگان`
-                                      : `${n.p} سکه`,
+                                (0, $.jsxs)(`div`, {
+                                  className: `mt-2 flex items-center justify-between text-[11px] font-semibold`,
+                                  children: [
+                                    (0, $.jsx)(`span`, {
+                                      style: { color: wp.color },
+                                      children: wp.badge,
+                                    }),
+                                    (0, $.jsx)(`span`, {
+                                      className: `text-primary font-bold`,
+                                      children: `رایگان (تست نامحدود)`,
+                                    }),
+                                  ],
                                 }),
                               ],
                             });
@@ -14373,118 +14777,56 @@ function Cs() {
                       children: [
                         (0, $.jsx)(`div`, {
                           className: `mb-2 font-display text-lg text-primary`,
-                          children: `باله عقب (اسپویلر)`,
+                          children: `ارتقای مشخصات فنی سلاح خودرو`,
                         }),
                         (0, $.jsx)(`div`, {
-                          className: `grid grid-cols-2 gap-2`,
+                          className: `grid grid-cols-1 sm:grid-cols-2 gap-3`,
                           children: [
-                            { id: `none`, name: `بدون باله`, p: 0 },
-                            { id: `gt`, name: `باله مسابقه‌ای GT`, p: 250 },
-                          ].map((n) => {
-                            let r = (m.custom?.spoiler || `none`) === n.id;
-                            return (0, $.jsxs)(`button`, {
-                              key: n.id,
-                              onClick: () => {
-                                let i = m.custom?.spOwned || [`none`];
-                                if (i.includes(n.id)) {
-                                  let r = {
-                                    ...(e.custom || {}),
-                                    [m.id]: {
-                                      ...(m.custom || {}),
-                                      spoiler: n.id,
-                                    },
-                                  };
-                                  t({ ...e, custom: r });
-                                } else if (e.coins >= n.p) {
-                                  let a = [...i, n.id],
-                                    r = {
-                                      ...(e.custom || {}),
-                                      [m.id]: {
-                                        ...(m.custom || {}),
-                                        spoiler: n.id,
-                                        spOwned: a,
-                                      },
-                                    };
-                                  t({ ...e, coins: e.coins - n.p, custom: r });
-                                }
-                              },
-                              className: `flex items-center justify-between rounded-lg border-2 px-3 py-2 ${r ? `border-primary bg-primary/20` : `border-outline bg-muted/40`}`,
+                            { id: `damage`, name: `قدرت تخریب (Damage)`, icon: `💥` },
+                            { id: `fireRate`, name: `سرعت شلیک (Fire Rate)`, icon: `⚡` },
+                            { id: `cooling`, name: `خنک‌کننده و خشاب (Cooling)`, icon: `❄️` },
+                            { id: `impact`, name: `نفوذ و انفجار (Penetration)`, icon: `🎯` },
+                          ].map((up) => {
+                            let curCustom = e.custom || {};
+                            let carCustom = curCustom[m.id] || {};
+                            let wStats = carCustom.weaponStats || { damage: 1, fireRate: 1, cooling: 1, impact: 1 };
+                            let lvl = wStats[up.id] || 1;
+                            let isMax = lvl >= 10;
+                            return (0, $.jsxs)(`div`, {
+                              key: up.id,
+                              className: `flex items-center justify-between rounded-xl border border-outline bg-muted/40 p-2.5`,
                               children: [
-                                (0, $.jsx)(`span`, {
-                                  className: `font-display text-sm`,
-                                  children: n.name,
+                                (0, $.jsxs)(`div`, {
+                                  className: `flex flex-col`,
+                                  children: [
+                                    (0, $.jsxs)(`span`, {
+                                      className: `font-display text-sm flex items-center gap-1.5`,
+                                      children: [(0, $.jsx)(`span`, { children: up.icon }), up.name],
+                                    }),
+                                    (0, $.jsxs)(`div`, {
+                                      className: `flex items-center gap-1 mt-1`,
+                                      children: Array.from({ length: 10 }).map((_, i) =>
+                                        (0, $.jsx)(`span`, {
+                                          key: i,
+                                          className: `h-1.5 w-3 rounded-sm ${i < lvl ? `bg-primary shadow-sm` : `bg-black/30`}`,
+                                        })
+                                      ),
+                                    }),
+                                  ],
                                 }),
-                                (0, $.jsx)(`span`, {
-                                  className: `text-xs text-muted-foreground`,
-                                  children: (
-                                    m.custom?.spOwned || [`none`]
-                                  ).includes(n.id)
-                                    ? `داری`
-                                    : n.p === 0
-                                      ? `رایگان`
-                                      : `${n.p} سکه`,
-                                }),
-                              ],
-                            });
-                          }),
-                        }),
-                      ],
-                    }),
-                    (0, $.jsxs)(`div`, {
-                      className: `panel-game bg-card p-3`,
-                      children: [
-                        (0, $.jsx)(`div`, {
-                          className: `mb-2 font-display text-lg text-primary`,
-                          children: `طرح و استیکر بدنه`,
-                        }),
-                        (0, $.jsx)(`div`, {
-                          className: `grid grid-cols-2 gap-2`,
-                          children: [
-                            { id: `none`, name: `ساده فابریک`, p: 0 },
-                            { id: `flames`, name: `شعله آتشین`, p: 250 },
-                          ].map((n) => {
-                            let r = (m.custom?.decal || `none`) === n.id;
-                            return (0, $.jsxs)(`button`, {
-                              key: n.id,
-                              onClick: () => {
-                                let i = m.custom?.decOwned || [`none`];
-                                if (i.includes(n.id)) {
-                                  let r = {
-                                    ...(e.custom || {}),
-                                    [m.id]: {
-                                      ...(m.custom || {}),
-                                      decal: n.id,
-                                    },
-                                  };
-                                  t({ ...e, custom: r });
-                                } else if (e.coins >= n.p) {
-                                  let a = [...i, n.id],
-                                    r = {
-                                      ...(e.custom || {}),
-                                      [m.id]: {
-                                        ...(m.custom || {}),
-                                        decal: n.id,
-                                        decOwned: a,
-                                      },
+                                (0, $.jsx)(`button`, {
+                                  disabled: isMax,
+                                  onClick: () => {
+                                    if (isMax) return;
+                                    let nextStats = { ...wStats, [up.id]: Math.min(10, lvl + 1) };
+                                    let newCustom = {
+                                      ...curCustom,
+                                      [m.id]: { ...carCustom, weaponStats: nextStats },
                                     };
-                                  t({ ...e, coins: e.coins - n.p, custom: r });
-                                }
-                              },
-                              className: `flex items-center justify-between rounded-lg border-2 px-3 py-2 ${r ? `border-primary bg-primary/20` : `border-outline bg-muted/40`}`,
-                              children: [
-                                (0, $.jsx)(`span`, {
-                                  className: `font-display text-sm`,
-                                  children: n.name,
-                                }),
-                                (0, $.jsx)(`span`, {
-                                  className: `text-xs text-muted-foreground`,
-                                  children: (
-                                    m.custom?.decOwned || [`none`]
-                                  ).includes(n.id)
-                                    ? `داری`
-                                    : n.p === 0
-                                      ? `رایگان`
-                                      : `${n.p} سکه`,
+                                    t({ ...e, custom: newCustom });
+                                  },
+                                  className: `btn-game px-3 py-1.5 text-xs font-bold ${isMax ? `bg-muted text-muted-foreground opacity-60 cursor-not-allowed` : `bg-primary text-primary-foreground hover:scale-105 active:scale-95`}`,
+                                  children: isMax ? `حداکثر (Lv 10)` : `ارتقا به لول ${lvl + 1}`,
                                 }),
                               ],
                             });
